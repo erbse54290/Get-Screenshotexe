@@ -21,6 +21,8 @@ Neu bauen aus `src/Get-Screenshot.c`: im Projektordner `build.bat`. Dafür wird 
 Get-Screenshot.exe -Name HMI -Speicherort C:\Temp -B 1920 -H 1080
 ```
 
+Ohne Parameter öffnet sich ein Infofenster mit dieser Beschreibung. Es wird dann kein Screenshot erstellt. Die Standardwerte gelten erst, wenn mindestens ein Parameter angegeben ist.
+
 | Parameter | Bedeutung | Standard |
 |---|---|---|
 | `-Name` | Anfang des Dateinamens | leer |
@@ -39,7 +41,7 @@ Dateiname: `<Speicherort>\<Name>_TTMMJJ_HHMMSS.png`
 
 Beispiel: `C:\Temp\HMI_091126_083415.png`
 
-Die Konsole gibt den vollen Pfad aus. Exitcode 0 heißt gespeichert, 1 falscher Parameter, 2 Bildschirm nicht lesbar, 3 PNG nicht geschrieben.
+Die Konsole gibt den vollen Pfad aus, wenn eine PNG entstanden ist. Exitcode 0 heißt gespeichert oder nur Infofenster, 1 falscher Parameter, 2 Bildschirm nicht lesbar, 3 PNG nicht geschrieben.
 
 Muss in der angemeldeten Windows-Sitzung laufen. Als Dienst ohne Desktop gibt es keinen Bildschirm.
 

@@ -8,6 +8,8 @@
  *
  * Aufruf:
  *   Get-Screenshot.exe -Name HMI -Speicherort C:\Temp -OffsetLeft 0 -OffsetTop 0 -H 1080 -B 1920
+ *
+ * Ohne Parameter erscheint ein Infofenster. Es wird dann kein Screenshot gespeichert.
  */
 
 #define COBJMACROS
@@ -111,32 +113,61 @@ static void init_output(void) {
     }
 }
 
-static void show_help(void) {
-    static const wchar_t *help =
-        L"Get-Screenshot.exe - von Grok erstellt\r\n"
-        L"Portable EXE, kein PowerShell, kein Setup.\r\n"
+static const wchar_t *info_text(void) {
+    return
+        L"Get-Screenshot\r\n"
         L"\r\n"
-        L"Get-Screenshot.exe [-Name Name] [-Speicherort Ordner]\r\n"
-        L"                   [-OffsetLeft X] [-OffsetTop Y] [-H Hoehe] [-B Breite]\r\n"
+        L"Fotografiert ein Rechteck des Bildschirms und speichert es als PNG.\r\n"
+        L"Kein PowerShell, kein Setup, kein .NET.\r\n"
         L"\r\n"
-        L"Standard:\r\n"
-        L"  Name         (leer)\r\n"
-        L"  Speicherort  Eigene Dokumente\r\n"
-        L"  OffsetLeft   0\r\n"
-        L"  OffsetTop    0\r\n"
-        L"  H            1080\r\n"
-        L"  B            1920\r\n"
+        L"Ohne Parameter wird kein Bild gespeichert.\r\n"
         L"\r\n"
-        L"Datei: <Speicherort>\\<Name>_ddMMyy_HHmmss.png\r\n"
+        L"Aufruf:\r\n"
+        L"  Get-Screenshot.exe -Name Name -Speicherort Ordner\r\n"
+        L"                     -OffsetLeft X -OffsetTop Y -B Breite -H Hoehe\r\n"
+        L"\r\n"
+        L"Parameter:\r\n"
+        L"  -Name         Anfang des Dateinamens\r\n"
+        L"  -Speicherort  Zielordner. Standard: Eigene Dokumente\r\n"
+        L"  -OffsetLeft   Start von links, Pixel. Standard: 0\r\n"
+        L"  -OffsetTop    Start von oben, Pixel. Standard: 0\r\n"
+        L"  -B            Breite in Pixel. Standard: 1920\r\n"
+        L"  -H            Hoehe in Pixel. Standard: 1080\r\n"
+        L"  -?            diese Hilfe\r\n"
+        L"\r\n"
+        L"Dateiname: Ordner\\Name_TTMMJJ_HHMMSS.png\r\n"
+        L"Beispiel:  C:\\Temp\\HMI_091126_083415.png\r\n"
         L"Punkte im Namen werden zu Unterstrichen.\r\n"
         L"\r\n"
+        L"Der Nullpunkt ist die linke obere Ecke des Hauptbildschirms.\r\n"
+        L"Ein Monitor links davon hat einen negativen OffsetLeft.\r\n"
+        L"\r\n"
         L"Beispiel:\r\n"
-        L"  Get-Screenshot.exe -Name HMI -Speicherort C:\\Temp -OffsetLeft 100 -OffsetTop 50 -H 1080 -B 1920";
+        L"  Get-Screenshot.exe -Name HMI -Speicherort C:\\Temp -B 1920 -H 1080";
+}
+
+/* Konsole, wenn vorhanden. Sonst das Infofenster. */
+static void show_help(void) {
+    const wchar_t *help = info_text();
 
     if (g_can_print) {
         emit_out(help);
-    } else if (desktop_visible()) {
-        MessageBoxW(NULL, help, L"Get-Screenshot", MB_OK);
+        return;
+    }
+    if (desktop_visible()) {
+        MessageBoxW(NULL, help, L"Get-Screenshot", MB_ICONINFORMATION | MB_OK);
+    }
+}
+
+/* Aufruf ohne Parameter: immer das Fenster, zusaetzlich Text in der Konsole. */
+static void show_info_window(void) {
+    const wchar_t *help = info_text();
+
+    if (g_can_print) {
+        emit_out(help);
+    }
+    if (desktop_visible()) {
+        MessageBoxW(NULL, help, L"Get-Screenshot", MB_ICONINFORMATION | MB_OK);
     }
 }
 
@@ -469,6 +500,12 @@ int main(void) {
     if (!argv) {
         emit_err(L"Kommandozeile konnte nicht gelesen werden.");
         return 1;
+    }
+
+    if (argc <= 1) {
+        show_info_window();
+        LocalFree(argv);
+        return 0;
     }
 
     for (i = 1; i < argc; i++) {

@@ -17,7 +17,9 @@ Eine einzelne EXE. Kein Setup, kein .NET, keine zusätzliche DLL. Windows 10 und
 
 ## 3 Aufruf
 
-Parameter sind optional. Ohne Argumente gilt 1920 x 1080 Pixel ab der linken oberen Ecke des Hauptbildschirms, gespeichert unter Eigene Dokumente.
+Ohne Parameter öffnet sich ein Infofenster. Es beschreibt, was das Programm kann und wie der Aufruf aussieht. Dabei wird kein Screenshot erstellt.
+
+Die übrigen Parameter sind optional. Fehlt einer, gilt der Standard: 1920 x 1080 Pixel ab der linken oberen Ecke des Hauptbildschirms, gespeichert unter Eigene Dokumente. Dafür muss mindestens ein Parameter angegeben sein, zum Beispiel nur `-Speicherort`.
 
 ```bat
 Get-Screenshot.exe -Name HMI -Speicherort C:\Temp -B 1920 -H 1080
@@ -89,7 +91,7 @@ Die Pixel gehen an die Windows Imaging Component (`windowscodecs.dll`). Es wird 
 
 | Code | Bedeutung |
 |---|---|
-| 0 | PNG wurde geschrieben. Der Pfad steht in der Konsole. |
+| 0 | PNG wurde geschrieben, oder es wurde nur das Infofenster bzw. die Hilfe angezeigt. Der Pfad steht in der Konsole, wenn eine Datei entstanden ist. |
 | 1 | Parameter falsch oder Zielordner nicht angelegt. |
 | 2 | Bildschirm konnte nicht gelesen werden. |
 | 3 | PNG konnte nicht geschrieben werden. |
@@ -97,6 +99,8 @@ Die Pixel gehen an die Windows Imaging Component (`windowscodecs.dll`). Es wird 
 Bei einem Fehler in der Eingabeaufforderung erscheint der Text dort. Beim Doppelklick ohne Konsole erscheint ein Meldungsfenster, aber nur wenn ein Desktop sichtbar ist.
 
 ## 6 Beispiele
+
+Doppelklick oder Aufruf ohne Parameter: Infofenster, kein Bild.
 
 Gesamter Hauptbildschirm, Standardgröße:
 
