@@ -17,7 +17,7 @@ Das erzeugt `Get-Screenshot.exe` (64-Bit) und `Get-Screenshot-x86.exe` (32-Bit).
 ## Aufruf
 
 ```bat
-Get-Screenshot.exe -Name "101_KA_Mersch_AE01_HZ_P" -Speicherort "D:\Mask\Screenshots" -B 1920 -H 1080
+Get-Screenshot.exe -Name HMI -Speicherort C:\Temp -B 1920 -H 1080
 ```
 
 | Parameter | Bedeutung | Standard |
@@ -36,7 +36,7 @@ Der Nullpunkt ist die linke obere Ecke des Hauptbildschirms. Ein Monitor links d
 
 Dateiname: `<Speicherort>\<Name>_TTMMJJ_HHMMSS.png`
 
-Beispiel: `D:\Mask\Screenshots\101_KA_Mersch_AE01_HZ_P_091126_083415.png`
+Beispiel: `C:\Temp\HMI_091126_083415.png`
 
 Die Konsole gibt den vollen Pfad aus. Exitcode 0 heißt gespeichert, 1 falscher Parameter, 2 Bildschirm nicht lesbar, 3 PNG nicht geschrieben.
 
