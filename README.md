@@ -6,13 +6,14 @@ Von Grok erstellt. Stand 09.11.2026.
 
 ## Download
 
-Die EXE-Dateien liegen unter `dist/` als Base64, weil der Upload rohe Binärdateien verfälschen würde. Auf dem Windows-PC im Ordner `dist`:
+Die Programme liegen fertig unter `dist/`:
 
-```bat
-decode.bat
-```
+- `Get-Screenshot.exe` für 64-Bit-Windows
+- `Get-Screenshot-x86.exe` für 32-Bit-Windows
 
-Das erzeugt `Get-Screenshot.exe` (64-Bit) und `Get-Screenshot-x86.exe` (32-Bit). `certutil` gehört zu Windows, PowerShell ist nicht nötig.
+Datei herunterladen und aufrufen. Git speichert die EXE bytegenau, Base64 ist nicht nötig.
+
+Neu bauen aus `src/Get-Screenshot.c`: im Projektordner `build.bat`. Dafür wird [Zig](https://ziglang.org/download/) gebraucht.
 
 ## Aufruf
 
