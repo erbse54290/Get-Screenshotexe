@@ -20,7 +20,7 @@ Eine einzelne EXE. Kein Setup, kein .NET, keine zusätzliche DLL. Windows 10 und
 Parameter sind optional. Ohne Argumente gilt 1920 x 1080 Pixel ab der linken oberen Ecke des Hauptbildschirms, gespeichert unter Eigene Dokumente.
 
 ```bat
-Get-Screenshot.exe -Name "101_KA_Mersch_AE01_HZ_P" -Speicherort "D:\Mask\Screenshots" -B 1920 -H 1080
+Get-Screenshot.exe -Name HMI -Speicherort C:\Temp -B 1920 -H 1080
 ```
 
 In der Eingabeaufforderung Anführungszeichen verwenden, wenn Name oder Pfad Leerzeichen enthält. Einfache Anführungszeichen, wie sie PowerShell setzt, werden ebenfalls entfernt.
@@ -50,7 +50,7 @@ Der Nullpunkt ist die linke obere Ecke des Hauptbildschirms. Ein Monitor links d
 Beispiel um 08:34:15 Uhr am 09.11.2026:
 
 ```text
-D:\Mask\Screenshots\101_KA_Mersch_AE01_HZ_P_091126_083415.png
+C:\Temp\HMI_091126_083415.png
 ```
 
 - Punkte im Namen werden zu Unterstrichen, ebenso `\ / : * ? " < > |`.
@@ -101,19 +101,19 @@ Bei einem Fehler in der Eingabeaufforderung erscheint der Text dort. Beim Doppel
 Gesamter Hauptbildschirm, Standardgröße:
 
 ```bat
-Get-Screenshot.exe -Name HMI -Speicherort D:\Mask\Screenshots
+Get-Screenshot.exe -Name HMI -Speicherort C:\Temp
 ```
 
 Fester Ausschnitt:
 
 ```bat
-Get-Screenshot.exe -Name "101_KA_Mersch_AE01_HZ_P" -Speicherort "D:\Mask\Screenshots" -OffsetLeft 0 -OffsetTop 0 -B 1920 -H 1080
+Get-Screenshot.exe -Name HMI -Speicherort C:\Temp -OffsetLeft 0 -OffsetTop 0 -B 1920 -H 1080
 ```
 
 Zweiter Monitor links vom Hauptbildschirm:
 
 ```bat
-Get-Screenshot.exe -Name Linie2 -Speicherort D:\Mask\Screenshots -OffsetLeft -1920 -B 1920 -H 1080
+Get-Screenshot.exe -Name Monitor2 -Speicherort C:\Temp -OffsetLeft -1920 -B 1920 -H 1080
 ```
 
 Hilfe:
