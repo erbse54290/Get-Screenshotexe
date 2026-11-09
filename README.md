@@ -21,7 +21,7 @@ Neu bauen aus `src/Get-Screenshot.c`: im Projektordner `build.bat`. Dafür wird 
 Get-Screenshot.exe -Name HMI -Speicherort C:\Temp -B 1920 -H 1080
 ```
 
-Ohne Parameter öffnet sich ein Infofenster mit dieser Beschreibung. Es wird dann kein Screenshot erstellt. Die Standardwerte gelten erst, wenn mindestens ein Parameter angegeben ist.
+Ohne Parameter öffnet sich ein Infofenster mit dem Grok-Logo und dieser Beschreibung. Es wird dann kein Screenshot erstellt. Die Standardwerte gelten erst, wenn mindestens ein Parameter angegeben ist.
 
 | Parameter | Bedeutung | Standard |
 |---|---|---|

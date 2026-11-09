@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "grok_logo.h"
 
 #define MAX_W 16384
 #define MAX_H 16384
@@ -146,7 +147,404 @@ static const wchar_t *info_text(void) {
         L"  Get-Screenshot.exe -Name HMI -Speicherort C:\\Temp -B 1920 -H 1080";
 }
 
-/* Konsole, wenn vorhanden. Sonst das Infofenster. */
+static void release_unknown(IUnknown *punk);
+
+typedef BOOL (WINAPI *AlphaBlendFn)(HDC, int, int, int, int, HDC, int, int, int, int, BLENDFUNCTION);
+
+typedef struct HelpView {
+    const wchar_t *text;
+    HBITMAP bitmap;
+    int src_w;
+    int src_h;
+    int logo_w;
+    int logo_h;
+    int dpi;
+    HFONT font;
+    HWND edit;
+    HWND button;
+    AlphaBlendFn alpha_blend;
+} HelpView;
+
+static int dip(const HelpView *view, int px) {
+    return MulDiv(px, view->dpi, 96);
+}
+
+/* Dunkle Zeichnung auf hellem Fenster, helle Zeichnung auf dunklem Fenster. */
+static int background_is_dark(void) {
+    DWORD bg = GetSysColor(COLOR_WINDOW);
+    int r = GetRValue(bg);
+    int g = GetGValue(bg);
+    int b = GetBValue(bg);
+
+    return (r * 299 + g * 587 + b * 114) / 1000 < 140;
+}
+
+static HBITMAP load_logo_bitmap(const unsigned char *data, unsigned int len, int *out_w, int *out_h) {
+    IWICImagingFactory *factory = NULL;
+    IWICStream *stream = NULL;
+    IWICBitmapDecoder *decoder = NULL;
+    IWICBitmapFrameDecode *frame = NULL;
+    IWICFormatConverter *converter = NULL;
+    HBITMAP bitmap = NULL;
+    void *bits = NULL;
+    UINT width = 0;
+    UINT height = 0;
+    HRESULT hr;
+    BITMAPINFO info;
+
+    *out_w = 0;
+    *out_h = 0;
+
+    hr = CoCreateInstance(&CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER,
+                          &IID_IWICImagingFactory, (void **)&factory);
+    if (FAILED(hr)) {
+        return NULL;
+    }
+
+    hr = IWICImagingFactory_CreateStream(factory, &stream);
+    if (SUCCEEDED(hr)) {
+        hr = IWICStream_InitializeFromMemory(stream, (BYTE *)data, len);
+    }
+    if (SUCCEEDED(hr)) {
+        hr = IWICImagingFactory_CreateDecoderFromStream(
+            factory, (IStream *)stream, NULL, WICDecodeMetadataCacheOnLoad, &decoder);
+    }
+    if (SUCCEEDED(hr)) {
+        hr = IWICBitmapDecoder_GetFrame(decoder, 0, &frame);
+    }
+    if (SUCCEEDED(hr)) {
+        hr = IWICImagingFactory_CreateFormatConverter(factory, &converter);
+    }
+    if (SUCCEEDED(hr)) {
+        hr = IWICFormatConverter_Initialize(
+            converter, (IWICBitmapSource *)frame, &GUID_WICPixelFormat32bppPBGRA,
+            WICBitmapDitherTypeNone, NULL, 0.0, WICBitmapPaletteTypeCustom);
+    }
+    if (SUCCEEDED(hr)) {
+        hr = IWICBitmapSource_GetSize((IWICBitmapSource *)converter, &width, &height);
+    }
+    if (FAILED(hr) || width == 0 || height == 0 || width > 8192 || height > 8192) {
+        goto cleanup;
+    }
+
+    ZeroMemory(&info, sizeof(info));
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = (LONG)width;
+    info.bmiHeader.biHeight = -(LONG)height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    bitmap = CreateDIBSection(NULL, &info, DIB_RGB_COLORS, &bits, NULL, 0);
+    if (!bitmap || !bits) {
+        bitmap = NULL;
+        goto cleanup;
+    }
+
+    hr = IWICBitmapSource_CopyPixels((IWICBitmapSource *)converter, NULL,
+                                     width * 4u, width * height * 4u, (BYTE *)bits);
+    if (FAILED(hr)) {
+        DeleteObject(bitmap);
+        bitmap = NULL;
+        goto cleanup;
+    }
+
+    *out_w = (int)width;
+    *out_h = (int)height;
+
+cleanup:
+    release_unknown((IUnknown *)converter);
+    release_unknown((IUnknown *)frame);
+    release_unknown((IUnknown *)decoder);
+    release_unknown((IUnknown *)stream);
+    release_unknown((IUnknown *)factory);
+    return bitmap;
+}
+
+static void paint_logo(const HelpView *view, HDC hdc, int x, int y) {
+    HDC mem;
+    HGDIOBJ old;
+    BLENDFUNCTION blend;
+
+    if (!view->bitmap || view->logo_w < 1 || view->logo_h < 1) {
+        return;
+    }
+
+    mem = CreateCompatibleDC(hdc);
+    if (!mem) {
+        return;
+    }
+    old = SelectObject(mem, view->bitmap);
+    SetStretchBltMode(hdc, HALFTONE);
+    SetBrushOrgEx(hdc, 0, 0, NULL);
+    blend.BlendOp = AC_SRC_OVER;
+    blend.BlendFlags = 0;
+    blend.SourceConstantAlpha = 255;
+    blend.AlphaFormat = AC_SRC_ALPHA;
+    if (!view->alpha_blend ||
+        !view->alpha_blend(hdc, x, y, view->logo_w, view->logo_h, mem, 0, 0,
+                           view->src_w, view->src_h, blend)) {
+        StretchBlt(hdc, x, y, view->logo_w, view->logo_h, mem, 0, 0,
+                   view->src_w, view->src_h, SRCCOPY);
+    }
+    SelectObject(mem, old);
+    DeleteDC(mem);
+}
+
+static void layout_help(HWND hwnd, HelpView *view) {
+    RECT rc;
+    int pad = dip(view, 16);
+    int top = dip(view, 12) + view->logo_h + dip(view, 8);
+    int button_h = dip(view, 28);
+    int button_w = dip(view, 96);
+
+    GetClientRect(hwnd, &rc);
+    if (view->edit) {
+        MoveWindow(view->edit, pad, top, rc.right - pad * 2,
+                   rc.bottom - top - button_h - pad * 2, TRUE);
+    }
+    if (view->button) {
+        MoveWindow(view->button, (rc.right - button_w) / 2,
+                   rc.bottom - button_h - pad, button_w, button_h, TRUE);
+    }
+}
+
+static LRESULT CALLBACK help_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    HelpView *view = (HelpView *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+
+    switch (msg) {
+    case WM_CREATE: {
+        CREATESTRUCTW *created = (CREATESTRUCTW *)lp;
+        view = (HelpView *)created->lpCreateParams;
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)view);
+        view->font = CreateFontW(-dip(view, 15), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                 CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+        view->edit = CreateWindowExW(
+            0, L"EDIT", view->text,
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_READONLY | WS_VSCROLL | ES_AUTOVSCROLL,
+            0, 0, 10, 10, hwnd, (HMENU)100, GetModuleHandleW(NULL), NULL);
+        view->button = CreateWindowExW(
+            0, L"BUTTON", L"OK",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+            0, 0, 10, 10, hwnd, (HMENU)IDOK, GetModuleHandleW(NULL), NULL);
+        if (view->font) {
+            SendMessageW(view->edit, WM_SETFONT, (WPARAM)view->font, TRUE);
+            SendMessageW(view->button, WM_SETFONT, (WPARAM)view->font, TRUE);
+        }
+        SendMessageW(view->edit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN,
+                     MAKELONG(dip(view, 8), dip(view, 8)));
+        layout_help(hwnd, view);
+        return 0;
+    }
+    case WM_SIZE:
+        if (view) {
+            layout_help(hwnd, view);
+        }
+        return 0;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        FillRect(hdc, &rc, GetSysColorBrush(COLOR_WINDOW));
+        if (view && view->bitmap) {
+            paint_logo(view, hdc, (rc.right - view->logo_w) / 2, dip(view, 12));
+        }
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_CTLCOLOREDIT: {
+        HDC hdc = (HDC)wp;
+        SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));
+        SetBkColor(hdc, GetSysColor(COLOR_WINDOW));
+        return (LRESULT)GetSysColorBrush(COLOR_WINDOW);
+    }
+    case WM_COMMAND:
+        if (LOWORD(wp) == IDOK) {
+            DestroyWindow(hwnd);
+        }
+        return 0;
+    case WM_CLOSE:
+        DestroyWindow(hwnd);
+        return 0;
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+    default:
+        break;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+static void show_logo_help(const wchar_t *text) {
+    HelpView view;
+    HRESULT co_hr;
+    const unsigned char *png;
+    unsigned int png_len;
+    MSG msg;
+    RECT frame;
+    RECT work;
+    HWND hwnd;
+    HMODULE blend_lib;
+    int client_w;
+    int client_h;
+    int x;
+    int y;
+    DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN;
+    DWORD exstyle = WS_EX_DLGMODALFRAME;
+    WNDCLASSW wc;
+
+    ZeroMemory(&view, sizeof(view));
+    view.text = text;
+    view.dpi = 96;
+
+    co_hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    if (FAILED(co_hr) && co_hr != RPC_E_CHANGED_MODE) {
+        MessageBoxW(NULL, text, L"Get-Screenshot", MB_OK);
+        return;
+    }
+
+    if (background_is_dark()) {
+        png = grok_logo_light_png;
+        png_len = grok_logo_light_png_len;
+    } else {
+        png = grok_logo_dark_png;
+        png_len = grok_logo_dark_png_len;
+    }
+    view.bitmap = load_logo_bitmap(png, png_len, &view.src_w, &view.src_h);
+    if (!view.bitmap || view.src_w < 1 || view.src_h < 1) {
+        if (view.bitmap) {
+            DeleteObject(view.bitmap);
+        }
+        if (co_hr != RPC_E_CHANGED_MODE) {
+            CoUninitialize();
+        }
+        MessageBoxW(NULL, text, L"Get-Screenshot", MB_ICONINFORMATION | MB_OK);
+        return;
+    }
+
+    {
+        HDC screen = GetDC(NULL);
+        if (screen) {
+            view.dpi = GetDeviceCaps(screen, LOGPIXELSX);
+            ReleaseDC(NULL, screen);
+        }
+    }
+    if (view.dpi < 96) {
+        view.dpi = 96;
+    }
+
+    blend_lib = LoadLibraryW(L"msimg32.dll");
+    if (blend_lib) {
+        view.alpha_blend = (AlphaBlendFn)GetProcAddress(blend_lib, "AlphaBlend");
+    }
+
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+    frame.left = 0;
+    frame.top = 0;
+    frame.right = 0;
+    frame.bottom = 0;
+    AdjustWindowRectEx(&frame, style, FALSE, exstyle);
+    {
+        int extra_w = frame.right - frame.left;
+        int extra_h = frame.bottom - frame.top;
+        int avail_w = (work.right - work.left) - extra_w - dip(&view, 8);
+        int avail_h = (work.bottom - work.top) - extra_h - dip(&view, 8);
+
+        if (avail_w < dip(&view, 280)) {
+            avail_w = dip(&view, 280);
+        }
+        if (avail_h < dip(&view, 220)) {
+            avail_h = dip(&view, 220);
+        }
+        client_w = dip(&view, 560);
+        client_h = dip(&view, 620);
+        if (client_w > avail_w) {
+            client_w = avail_w;
+        }
+        if (client_h > avail_h) {
+            client_h = avail_h;
+        }
+        view.logo_h = dip(&view, 96);
+        view.logo_w = view.src_w * view.logo_h / view.src_h;
+        if (view.logo_w > client_w - dip(&view, 32)) {
+            view.logo_w = client_w - dip(&view, 32);
+            if (view.logo_w < 1) {
+                view.logo_w = 1;
+            }
+            view.logo_h = view.src_h * view.logo_w / view.src_w;
+        }
+    }
+
+    frame.left = 0;
+    frame.top = 0;
+    frame.right = client_w;
+    frame.bottom = client_h;
+    AdjustWindowRectEx(&frame, style, FALSE, exstyle);
+    x = work.left + ((work.right - work.left) - (frame.right - frame.left)) / 2;
+    y = work.top + ((work.bottom - work.top) - (frame.bottom - frame.top)) / 2;
+    if (x < work.left) {
+        x = work.left;
+    }
+    if (y < work.top) {
+        y = work.top;
+    }
+
+    ZeroMemory(&wc, sizeof(wc));
+    wc.lpfnWndProc = help_proc;
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.hCursor = LoadCursorA(NULL, IDC_ARROW);
+    wc.hbrBackground = GetSysColorBrush(COLOR_WINDOW);
+    wc.lpszClassName = L"GetScreenshotHelp";
+    RegisterClassW(&wc);
+
+    hwnd = CreateWindowExW(exstyle, L"GetScreenshotHelp", L"Get-Screenshot", style,
+                           x, y, frame.right - frame.left, frame.bottom - frame.top,
+                           NULL, NULL, GetModuleHandleW(NULL), &view);
+    if (!hwnd) {
+        if (view.bitmap) {
+            DeleteObject(view.bitmap);
+        }
+        if (blend_lib) {
+            FreeLibrary(blend_lib);
+        }
+        if (co_hr != RPC_E_CHANGED_MODE) {
+            CoUninitialize();
+        }
+        MessageBoxW(NULL, text, L"Get-Screenshot", MB_ICONINFORMATION | MB_OK);
+        return;
+    }
+
+    ShowWindow(hwnd, SW_SHOW);
+    UpdateWindow(hwnd);
+    SetForegroundWindow(hwnd);
+
+    while (GetMessageW(&msg, NULL, 0, 0) > 0) {
+        if (msg.message == WM_KEYDOWN && msg.wParam == VK_ESCAPE) {
+            DestroyWindow(hwnd);
+            continue;
+        }
+        if (!IsDialogMessageW(hwnd, &msg)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
+
+    if (view.font) {
+        DeleteObject(view.font);
+    }
+    if (view.bitmap) {
+        DeleteObject(view.bitmap);
+    }
+    if (blend_lib) {
+        FreeLibrary(blend_lib);
+    }
+    if (co_hr != RPC_E_CHANGED_MODE) {
+        CoUninitialize();
+    }
+}
+
+/* Konsole, wenn vorhanden. Sonst das Infofenster mit Logo. */
 static void show_help(void) {
     const wchar_t *help = info_text();
 
@@ -155,7 +553,7 @@ static void show_help(void) {
         return;
     }
     if (desktop_visible()) {
-        MessageBoxW(NULL, help, L"Get-Screenshot", MB_ICONINFORMATION | MB_OK);
+        show_logo_help(help);
     }
 }
 
@@ -167,7 +565,7 @@ static void show_info_window(void) {
         emit_out(help);
     }
     if (desktop_visible()) {
-        MessageBoxW(NULL, help, L"Get-Screenshot", MB_ICONINFORMATION | MB_OK);
+        show_logo_help(help);
     }
 }
 

@@ -17,7 +17,7 @@ Eine einzelne EXE. Kein Setup, kein .NET, keine zusätzliche DLL. Windows 10 und
 
 ## 3 Aufruf
 
-Ohne Parameter öffnet sich ein Infofenster. Es beschreibt, was das Programm kann und wie der Aufruf aussieht. Dabei wird kein Screenshot erstellt.
+Ohne Parameter öffnet sich ein Infofenster mit dem Grok-Logo. Es beschreibt, was das Programm kann und wie der Aufruf aussieht. Dabei wird kein Screenshot erstellt.
 
 Die übrigen Parameter sind optional. Fehlt einer, gilt der Standard: 1920 x 1080 Pixel ab der linken oberen Ecke des Hauptbildschirms, gespeichert unter Eigene Dokumente. Dafür muss mindestens ein Parameter angegeben sein, zum Beispiel nur `-Speicherort`.
 
