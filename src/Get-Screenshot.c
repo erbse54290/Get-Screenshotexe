@@ -177,7 +177,7 @@ static void unquote(wchar_t *dst, size_t dst_count, const wchar_t *src) {
     }
     n = wcslen(src);
     if (n >= 2 &&
-        ((src[0] == L'\' && src[n - 1] == L'\'') ||
+        ((src[0] == L'\'' && src[n - 1] == L'\'') ||
          (src[0] == L'"' && src[n - 1] == L'"'))) {
         src++;
         n -= 2;
